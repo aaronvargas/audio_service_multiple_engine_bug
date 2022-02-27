@@ -2,10 +2,10 @@ import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
 
 late MyAudioHandler _audioHandler;
-
 class MyAudioHandler extends BaseAudioHandler
     with
         QueueHandler, // mix in default queue callback implementations
@@ -18,6 +18,8 @@ void callbackDispatcher() {
     return Future.value(true);
   });
 }
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 void main() async {
   _audioHandler = await AudioService.init(
@@ -32,9 +34,6 @@ void main() async {
       callbackDispatcher, // The top level function, aka callbackDispatcher
       isInDebugMode: true // If enabled it will post a notification whenever the task is running. Handy for debugging tasks
   );
-
-  await Workmanager().cancelAll();
-  await Workmanager().registerPeriodicTask("1", "simpleTask"); //Android only (see below)
 
   runApp(const MyApp());
 }
@@ -83,15 +82,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
-  void _incrementCounter() {
+  void startAudioService() {
     _audioHandler.playbackState.add(_audioHandler.playbackState.value.copyWith(
-      playing: true,
-      controls: [
-        MediaControl.pause,
-        MediaControl.stop,
-      ]
+        playing: true,
+        controls: [
+          MediaControl.pause,
+          MediaControl.stop,
+        ]
     ));
 
     _audioHandler.mediaItem.add(
@@ -137,21 +135,32 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
+            OutlinedButton(onPressed: (){
+              startAudioService();
+            }, child: Text("start audio service")),
+            OutlinedButton(onPressed: (){
+              Workmanager().registerOneOffTask("oneOffTask", "backgroundWork");
+            }, child: Text("run background task")),
+            OutlinedButton(onPressed: (){
+              flutterLocalNotificationsPlugin.initialize(InitializationSettings(android: AndroidInitializationSettings("ic_launcher")), onSelectNotification: onSelectNotification);
+              var androidPlatformChannelSpecifics = const AndroidNotificationDetails(
+                  "androidChannel", "androidChannelName",
+                  channelDescription: "androidChannelDesc",
+                  importance: Importance.max,
+                  priority: Priority.high,
+                  ticker: 'New Notification available');
+              flutterLocalNotificationsPlugin.show(0, "title", "message", NotificationDetails(android: androidPlatformChannelSpecifics),
+                  payload: "responsePayload");
+            }, child: Text("show notification")),
+            Text("now click the notification, crashes...")
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+}
+
+Future<void>? onSelectNotification(String? payload) {
+  print("onSelectNotification(payload: $payload)");
+  return null;
 }
